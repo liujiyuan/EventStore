@@ -76,15 +76,15 @@ function checkParams() {
     else
         CURRENT_DISTRO=$platform_override
     fi
-    LIBJS1EXT="so"
-    if [ "$ES_DISTRO" == "osx" ]; then
-        LIBJS1EXT="dylib"
-    fi
-    LIBJS1PATH="$BASE_DIR/src/libs/x64/$CURRENT_DISTRO/libjs1.$LIBJS1EXT"
-    if [ ! -f "$LIBJS1PATH" ]; then
-        echo "$LIBJS1PATH does not exist. Did you build libjs1 for this distribution/version?"
-        exit 1
-    fi
+    # LIBJS1EXT="so"
+    # if [ "$ES_DISTRO" == "osx" ]; then
+    #     LIBJS1EXT="dylib"
+    # fi
+    # LIBJS1PATH="$BASE_DIR/src/libs/x64/$CURRENT_DISTRO/libjs1.$LIBJS1EXT"
+    # if [ ! -f "$LIBJS1PATH" ]; then
+    #     echo "$LIBJS1PATH does not exist. Did you build libjs1 for this distribution/version?"
+    #     exit 1
+    # fi
 }
 
 function revertVersionFiles() {
@@ -213,6 +213,6 @@ checkParams "$1" "$2" "$3"
 
 echo "Running from base directory: $BASE_DIR"
 echo "Running on distribution: $CURRENT_DISTRO"
-linkCurrentJS1
+# linkCurrentJS1
 buildEventStore
 rm -rf "$BASE_NAME/src/libs/x64/$CURRENT_DISTRO"
