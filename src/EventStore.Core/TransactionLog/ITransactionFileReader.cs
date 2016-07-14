@@ -11,6 +11,7 @@ namespace EventStore.Core.TransactionLog
         SeqReadResult TryReadPrev();
 
         RecordReadResult TryReadAt(long position);
+        RecordReadResult TryReadAt(long position, string stream);
         bool ExistsAt(long position);
     }
 
@@ -57,9 +58,9 @@ namespace EventStore.Core.TransactionLog
             return Reader.ExistsAt(position);
         }
 
-        public RecordReadResult TryReadAt(long position)
+        public RecordReadResult TryReadAt(long position, string stream="foo")
         {
-            return Reader.TryReadAt(position);
+            return Reader.TryReadAt(position, stream);
         }
     }
 }

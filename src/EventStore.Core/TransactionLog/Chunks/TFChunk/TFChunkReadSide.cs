@@ -4,6 +4,7 @@ using EventStore.Common.Utils;
 using EventStore.Core.Data;
 using EventStore.Core.Exceptions;
 using EventStore.Core.TransactionLog.LogRecords;
+using EventStore.Common.Log;
 
 namespace EventStore.Core.TransactionLog.Chunks.TFChunk
 {
@@ -16,6 +17,7 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
 
             bool ExistsAt(long logicalPosition);
             RecordReadResult TryReadAt(long logicalPosition);
+            RecordReadResult TryReadAt(long logicalPosition, string stream);
             RecordReadResult TryReadFirst();
             RecordReadResult TryReadClosestForward(long logicalPosition);
             RecordReadResult TryReadLast();
@@ -24,6 +26,7 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
 
         private class TFChunkReadSideUnscavenged: TFChunkReadSide, IChunkReadSide
         {
+
             public TFChunkReadSideUnscavenged(TFChunk chunk): base(chunk)
             {
                 if (chunk.ChunkHeader.IsScavenged)
@@ -55,7 +58,26 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
 
                     LogRecord record;
                     int length;
-                    var result = TryReadForwardInternal(workItem, logicalPosition, out length, out record);
+                    var result = TryReadForwardInternal(workItem, logicalPosition, out length, out record, "baz");
+                    return new RecordReadResult(result, -1, record, length);
+                }
+                finally
+                {
+                    Chunk.ReturnReaderWorkItem(workItem);
+                }
+            }
+
+            public RecordReadResult TryReadAt(long logicalPosition, string stream)
+            {
+                var workItem = Chunk.GetReaderWorkItem();
+                try
+                {
+                    if (logicalPosition >= Chunk.LogicalDataSize)
+                        return RecordReadResult.Failure;
+
+                    LogRecord record;
+                    int length;
+                    var result = TryReadForwardInternal(workItem, logicalPosition, out length, out record, stream);
                     return new RecordReadResult(result, -1, record, length);
                 }
                 finally
@@ -235,6 +257,26 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
                     LogRecord record;
                     int length;
                     var result = TryReadForwardInternal(workItem, actualPosition, out length, out record);
+                    return new RecordReadResult(result, -1, record, length);
+                }
+                finally
+                {
+                    Chunk.ReturnReaderWorkItem(workItem);
+                }
+            }
+
+            public RecordReadResult TryReadAt(long logicalPosition, string stream)
+            {
+                var workItem = Chunk.GetReaderWorkItem();
+                try
+                {
+                    var actualPosition = TranslateExactPosition(workItem, logicalPosition);
+                    if (actualPosition == -1 || actualPosition >= Chunk.PhysicalDataSize)
+                        return RecordReadResult.Failure;
+
+                    LogRecord record;
+                    int length;
+                    var result = TryReadForwardInternal(workItem, actualPosition, out length, out record, stream);
                     return new RecordReadResult(result, -1, record, length);
                 }
                 finally
@@ -436,6 +478,7 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
         private abstract class TFChunkReadSide
         {
             protected readonly TFChunk Chunk;
+            private static readonly ILogger Log = LogManager.GetLoggerFor<TFChunkReadSideUnscavenged>();
 
             protected TFChunkReadSide(TFChunk chunk)
             {
@@ -443,17 +486,26 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
                 Chunk = chunk;
             }
 
-            protected bool TryReadForwardInternal(ReaderWorkItem workItem, long actualPosition, out int length, out LogRecord record)
+            protected bool TryReadForwardInternal(ReaderWorkItem workItem, long actualPosition, out int length, out LogRecord record, string stream = "foo")
             {
                 length = -1;
                 record = null;
 
                 workItem.Stream.Position = GetRawPosition(actualPosition);
 
+                var dolog = stream == "Return-cb0c48ce4b9a4e1cbca7c89f2eef6a62";
+
+                if (dolog) {
+                    Log.Info(stream + ": Enter interesting read. " + actualPosition);
+                }
+
                 if (actualPosition + 2*sizeof(int) > Chunk.PhysicalDataSize) // no space even for length prefix and suffix
                     return false;
 
                 length = workItem.Reader.ReadInt32();
+                if (dolog) {
+                    Log.Info(stream + ": Length read. " + length);
+                }
                 if (length <= 0)
                 {
                     throw new InvalidReadException(
@@ -474,11 +526,22 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
                                       + "Actual pre-position: {1}. Something is seriously wrong in chunk {2}.",
                                       length, actualPosition, Chunk));
                 }
-
+                if (dolog) {
+                    Log.Info(stream + ": Reading data.");
+                }
                 record = LogRecord.ReadFrom(workItem.Reader);
+                if (dolog) {
+                    Log.Info(stream + ": Done Reading data.");
+                }
 
                 // verify suffix length == prefix length
+                if (dolog) {
+                    Log.Info(stream + ": Reading suffix");                    
+                }
                 int suffixLength = workItem.Reader.ReadInt32();
+                if (dolog) {
+                    Log.Info(stream + ": Done reading suffix");                    
+                }
                 if (suffixLength != length)
                 {
                     throw new Exception(

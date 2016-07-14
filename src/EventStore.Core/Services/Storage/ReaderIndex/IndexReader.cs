@@ -123,7 +123,7 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
             long position;
             if (_tableIndex.TryGetOneValue(streamHash, eventNumber, out position))
             {
-                var rec = ReadPrepareInternal(reader, position);
+                var rec = ReadPrepareInternal(reader, position, streamId);
                 if (rec != null && rec.EventStreamId == streamId)
                     return rec;
 
@@ -132,7 +132,7 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
                     Interlocked.Increment(ref _hashCollisions);
                     if (indexEntry.Position == position) // already checked that
                         continue;
-                    rec = ReadPrepareInternal(reader, indexEntry.Position);
+                    rec = ReadPrepareInternal(reader, indexEntry.Position, streamId);
                     if (rec != null && rec.EventStreamId == streamId)
                         return rec;
                 }
@@ -140,9 +140,9 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
             return null;
         }
 
-        private static PrepareLogRecord ReadPrepareInternal(TFReaderLease reader, long logPosition)
+        private static PrepareLogRecord ReadPrepareInternal(TFReaderLease reader, long logPosition, string streamId)
         {
-            RecordReadResult result = reader.TryReadAt(logPosition);
+            RecordReadResult result = reader.TryReadAt(logPosition, streamId);
             if (!result.Success)
                 return null;
             if (result.LogRecord.RecordType != LogRecordType.Prepare)
@@ -181,7 +181,7 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
                 startEventNumber = Math.Max(startEventNumber, minEventNumber);
 
                 var recordsQuery = _tableIndex.GetRange(streamHash, startEventNumber, endEventNumber)
-                                              .Select(x => new { x.Version, Prepare = ReadPrepareInternal(reader, x.Position) })
+                                              .Select(x => new { x.Version, Prepare = ReadPrepareInternal(reader, x.Position, streamId) })
                                               .Where(x => x.Prepare != null && x.Prepare.EventStreamId == streamId);
 
                 if (metadata.MaxAge.HasValue)
@@ -236,7 +236,7 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
                 }
 
                 var recordsQuery = _tableIndex.GetRange(streamHash, startEventNumber, endEventNumber)
-                                              .Select(x => new { x.Version, Prepare = ReadPrepareInternal(reader, x.Position) })
+                                              .Select(x => new { x.Version, Prepare = ReadPrepareInternal(reader, x.Position, streamId) })
                                               .Where(x => x.Prepare != null && x.Prepare.EventStreamId == streamId);
 
                 if (metadata.MaxAge.HasValue)
@@ -262,7 +262,7 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
             Ensure.Nonnegative(transactionId, "transactionId");
             using (var reader = _backend.BorrowReader())
             {
-                var res = ReadPrepareInternal(reader, transactionId);
+                var res = ReadPrepareInternal(reader, transactionId, "transactionId");
                 return res == null ? null : res.EventStreamId;
             }
         }
@@ -391,7 +391,7 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
             if (!_tableIndex.TryGetLatestEntry(streamHash, out latestEntry))
                 return ExpectedVersion.NoStream;
 
-            var rec = ReadPrepareInternal(reader, latestEntry.Position);
+            var rec = ReadPrepareInternal(reader, latestEntry.Position, streamId);
             if (rec == null) throw new Exception("Could not read latest stream's prepare. That should never happen.");
             if (rec.EventStreamId == streamId) // LUCKY!!!
                 return latestEntry.Version;
@@ -399,7 +399,7 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
             // TODO AN here lies the problem of out of memory if the stream has A LOT of events in them
             foreach (var indexEntry in _tableIndex.GetRange(streamHash, 0, int.MaxValue))
             {
-                var r = ReadPrepareInternal(reader, indexEntry.Position);
+                var r = ReadPrepareInternal(reader, indexEntry.Position, streamId);
                 if (r != null && r.EventStreamId == streamId)
                     return indexEntry.Version; // AT LAST!!!
                 Interlocked.Increment(ref _hashCollisions);

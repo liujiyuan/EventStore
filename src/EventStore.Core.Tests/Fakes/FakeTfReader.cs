@@ -25,6 +25,12 @@ namespace EventStore.Core.Tests.Fakes
             throw new NotImplementedException();
         }
 
+        public RecordReadResult TryReadAt(long position, string stream)
+        {
+            throw new NotImplementedException();
+        }
+
+
         public bool ExistsAt(long position)
         {
             return true;

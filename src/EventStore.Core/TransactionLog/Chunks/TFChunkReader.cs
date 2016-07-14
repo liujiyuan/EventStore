@@ -137,10 +137,16 @@ namespace EventStore.Core.TransactionLog.Chunks
 
         public RecordReadResult TryReadAt(long position)
         {
-            return TryReadAtInternal(position, 0);
+            return TryReadAtInternal(position, 0, "foo");
         }
 
-        private RecordReadResult TryReadAtInternal(long position, int retries)
+
+        public RecordReadResult TryReadAt(long position, string stream)
+        {
+            return TryReadAtInternal(position, 0, stream);
+        }
+
+        private RecordReadResult TryReadAtInternal(long position, int retries, string stream = "foo")
         {
             var writerChk = _writerCheckpoint.Read();
             if (position >= writerChk)
@@ -150,7 +156,7 @@ namespace EventStore.Core.TransactionLog.Chunks
             try
             {
                 CountRead(chunk.IsCached);
-                return chunk.TryReadAt(chunk.ChunkHeader.GetLocalLogPosition(position));
+                return chunk.TryReadAt(chunk.ChunkHeader.GetLocalLogPosition(position), stream);
             }
             catch (FileBeingDeletedException)
             {

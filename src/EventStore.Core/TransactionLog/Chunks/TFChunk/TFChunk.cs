@@ -589,6 +589,11 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
             return _readSide.TryReadAt(logicalPosition);
         }
 
+        public RecordReadResult TryReadAt(long logicalPosition, string stream)
+        {
+            return _readSide.TryReadAt(logicalPosition, stream);
+        }
+
         public RecordReadResult TryReadFirst()
         {
             return _readSide.TryReadFirst();
