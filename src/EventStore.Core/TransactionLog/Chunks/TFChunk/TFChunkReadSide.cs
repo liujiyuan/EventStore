@@ -493,10 +493,10 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
 
                 workItem.Stream.Position = GetRawPosition(actualPosition);
 
-                var dolog = stream == "Return-cb0c48ce4b9a4e1cbca7c89f2eef6a62";
-
+                var dolog = true;
+                var id = Guid.NewGuid().ToString();
                 if (dolog) {
-                    Log.Info(stream + ": Enter interesting read. " + actualPosition);
+                    Log.Info(id + stream + ": Enter interesting read. " + actualPosition);
                 }
 
                 if (actualPosition + 2*sizeof(int) > Chunk.PhysicalDataSize) // no space even for length prefix and suffix
@@ -504,7 +504,7 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
 
                 length = workItem.Reader.ReadInt32();
                 if (dolog) {
-                    Log.Info(stream + ": Length read. " + length);
+                    Log.Info(id + ": Length read. " + length);
                 }
                 if (length <= 0)
                 {
@@ -527,20 +527,20 @@ namespace EventStore.Core.TransactionLog.Chunks.TFChunk
                                       length, actualPosition, Chunk));
                 }
                 if (dolog) {
-                    Log.Info(stream + ": Reading data.");
+                    Log.Info(id + ": Reading data.");
                 }
                 record = LogRecord.ReadFrom(workItem.Reader);
                 if (dolog) {
-                    Log.Info(stream + ": Done Reading data.");
+                    Log.Info(id + ": Done Reading data.");
                 }
 
                 // verify suffix length == prefix length
                 if (dolog) {
-                    Log.Info(stream + ": Reading suffix");                    
+                    Log.Info(id + ": Reading suffix");                    
                 }
                 int suffixLength = workItem.Reader.ReadInt32();
                 if (dolog) {
-                    Log.Info(stream + ": Done reading suffix");                    
+                    Log.Info(id + ": Done reading suffix");                    
                 }
                 if (suffixLength != length)
                 {
