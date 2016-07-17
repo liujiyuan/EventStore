@@ -384,25 +384,27 @@ namespace EventStore.Core.Services.Storage.ReaderIndex
             return res ?? lastEventNumber;
         }
 
-        private int GetStreamLastEventNumberUncached(TFReaderLease reader, string streamId)
+       private int GetStreamLastEventNumberUncached(TFReaderLease reader, string streamId)
         {
             var streamHash = _hasher.Hash(streamId);
             IndexEntry latestEntry;
             if (!_tableIndex.TryGetLatestEntry(streamHash, out latestEntry))
                 return ExpectedVersion.NoStream;
 
-            var rec = ReadPrepareInternal(reader, latestEntry.Position);
+            var rec = ReadPrepareInternal(reader, latestEntry.Position, streamId);
             if (rec == null) throw new Exception("Could not read latest stream's prepare. That should never happen.");
             if (rec.EventStreamId == streamId) // LUCKY!!!
                 return latestEntry.Version;
-
-            // TODO AN here lies the problem of out of memory if the stream has A LOT of events in them
+            int count = 0;
             foreach (var indexEntry in _tableIndex.GetRange(streamHash, 0, int.MaxValue))
             {
-                var r = ReadPrepareInternal(reader, indexEntry.Position);
+                //TODO put limit on GetRange internally as well (right now this could blow up memory)
+                var r = ReadPrepareInternal(reader, indexEntry.Position, streamId);
                 if (r != null && r.EventStreamId == streamId)
                     return indexEntry.Version; // AT LAST!!!
+                count++;
                 Interlocked.Increment(ref _hashCollisions);
+                if(count > 100) return ExpectedVersion.NoStream;
             }
             return ExpectedVersion.NoStream; // no such event stream
         }
