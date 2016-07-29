@@ -1,30 +1,70 @@
 using System;
-using System.Linq;
+using System.Security.Cryptography;
+using System.Diagnostics;
 using System.IO;
 using NUnit.Framework;
 using EventStore.Core.Index;
+using EventStore.Common.Utils;
 
 namespace EventStore.Core.Tests.Index
 {
     [TestFixture, Explicit]
     public class opening_a_ptable_with_more_than_32bits_of_records: SpecificationWithFilePerTestFixture
     {
+        public const int IndexEntrySize = sizeof(int) + sizeof(int) + sizeof(long);
+        public const int MD5Size = 16;
+        public const byte Version = 1;
+        public const int DefaultSequentialBufferSize = 65536;
+
         private PTable _ptable;
+        private long _size;
 
         public override void TestFixtureSetUp()
         {
             base.TestFixtureSetUp();
-            var header = new PTableHeader(1);
-            using(var f = File.Open(Filename, FileMode.OpenOrCreate)) {
-                f.Seek(0, SeekOrigin.Begin);
-                var bytes = header.AsByteArray();
-                f.Write(bytes, 0, bytes.Length);
-                var size = (long) (uint.MaxValue + 10000000L) * (long) PTable.IndexEntrySize + PTableHeader.Size + PTable.MD5Size;
-                Console.WriteLine("allocating file " + Filename + " size is " + size);
-                f.SetLength(size);
-                Console.WriteLine("file allocated");
-            }
+          
+            Console.WriteLine("Creating PTable at {0}. Size of PTable: {1}", Filename, _size);
+            _size = (long) (uint.MaxValue + 10000000L) * (long) PTable.IndexEntrySize + PTableHeader.Size + PTable.MD5Size;
+            CreatePTableFile(Filename, _size);
             _ptable = PTable.FromFile(Filename, 22);
+        }
+
+        public static void CreatePTableFile(string filename, long ptableSize, int cacheDepth = 16)
+        {
+            Ensure.NotNullOrEmpty(filename, "filename");
+            Ensure.Nonnegative(cacheDepth, "cacheDepth");
+
+            var sw = Stopwatch.StartNew();
+            var tableId = Guid.NewGuid();
+            using (var fs = new FileStream(filename, FileMode.Create, FileAccess.ReadWrite, FileShare.None,
+                                           DefaultSequentialBufferSize, FileOptions.SequentialScan))
+            {
+                fs.SetLength(PTableHeader.Size + IndexEntrySize * (long)ptableSize + MD5Size); // EXACT SIZE
+                fs.Seek(0, SeekOrigin.Begin);
+
+                using (var md5 = MD5.Create())
+                using (var cs = new CryptoStream(fs, md5, CryptoStreamMode.Write))
+                using (var bs = new BufferedStream(cs, DefaultSequentialBufferSize))
+                {
+                    // WRITE HEADER
+                    var headerBytes = new PTableHeader(Version).AsByteArray();
+                    cs.Write(headerBytes, 0, headerBytes.Length);
+
+                    // WRITE INDEX ENTRIES
+                    var buffer = new byte[IndexEntrySize];
+                    for (long i = 0; i < ptableSize; i++)
+                    {
+                        bs.Write(buffer, 0, IndexEntrySize);
+                    }
+                    bs.Flush();
+                    cs.FlushFinalBlock();
+
+                    // WRITE MD5
+                    var hash = md5.Hash;
+                    fs.Write(hash, 0, hash.Length);
+                }
+            }
+            Console.WriteLine("Created PTable File[{0}, {1} entries] in {1}.", tableId, ptableSize, sw.Elapsed);
         }
 
         public override void TestFixtureTearDown()
@@ -36,7 +76,7 @@ namespace EventStore.Core.Tests.Index
         [Test, Explicit]
         public void count_should_be_right()
         {
-            Assert.AreEqual((long) uint.MaxValue + 10000000L, _ptable.Count);
+            Assert.AreEqual(_size, _ptable.Count);
         }
 
         [Test, Explicit]
