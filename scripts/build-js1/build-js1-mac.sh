@@ -43,26 +43,30 @@ function get_v8_and_dependencies() {
         git clone --branch "$revision" https://chromium.googlesource.com/v8/v8 "$V8_BUILD_DIRECTORY"
     fi
 
-    local needsDependencies=false
-
     if [[ -d $V8_BUILD_DIRECTORY/build/gyp ]] ; then
         pushd "$V8_BUILD_DIRECTORY/build/gyp" > /dev/null
         git reset --hard
-        git checkout master
+        git checkout 27c626e0515f845338cb60b1d8405f40150a791d #git-svn-id: http://gyp.googlecode.com/svn/trunk@1806
         popd > /dev/null
     else
         echo "Checking out gyp repository..."
-        git clone https://chromium.googlesource.com/external/gyp "$V8_BUILD_DIRECTORY/build/gyp"
+        git clone https://github.com/svn2github/gyp "$V8_BUILD_DIRECTORY/build/gyp"
+        pushd "$V8_BUILD_DIRECTORY/build/gyp" > /dev/null
+        git checkout 27c626e0515f845338cb60b1d8405f40150a791d #git-svn-id: http://gyp.googlecode.com/svn/trunk@1806
+        popd > /dev/null
     fi
 
     if [[ -d $V8_BUILD_DIRECTORY/third_party/icu ]] ; then
         pushd "$V8_BUILD_DIRECTORY/third_party/icu" > /dev/null
         git reset --hard
-        git checkout master
+        git checkout 58c586c0424f93b75bba83fe39c651b39d146da3 #git-svn-id: http://src.chromium.org/svn/trunk/deps/third_party/icu46@239289
         popd > /dev/null
     else
         echo "Checking out icu repository..."
         git clone https://chromium.googlesource.com/chromium/third_party/icu46/ "$V8_BUILD_DIRECTORY/third_party/icu"
+        pushd "$V8_BUILD_DIRECTORY/third_party/icu" > /dev/null
+        git checkout 58c586c0424f93b75bba83fe39c651b39d146da3 #git-svn-id: http://src.chromium.org/svn/trunk/deps/third_party/icu46@239289
+        popd > /dev/null
     fi
 }
 
